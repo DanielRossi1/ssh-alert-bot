@@ -1,17 +1,33 @@
 #!/bin/bash
-# 0. nano /usr/local/bin/telegram-ssh-alert.sh - put the code here
-# 1. sudo chmod +x /usr/local/bin/telegram-ssh-alert.sh
-# 2. sudo nano /etc/ssh/sshrc
-# 3. add: /usr/local/bin/telegram-ssh-alert.sh
-# 4. sudo apt-get install jq (for json file processing JSON)
+# This script sends a notification to a Telegram bot when a new SSH access is detected.
+# It also checks the GPU usage and sends a notification if it exceeds a certain threshold.
+# The script uses a lock file to prevent multiple instances from running simultaneously.
+# It requires the following dependencies:
+# - curl
+# - jq
+# - nvidia-smi (for GPU usage check)
+VERSION="1.0.0"
 
+# Make sure to set the Telegram bot token and chat ID in the script.
 TOKEN=""
 
-USER_LOG_FILE="/tmp/ssh_access_log"
-LOCK_FILE="/tmp/ssh_access_log.lock"
+USER_LOG_FILE="/var/tmp/ssh_access_log"
+LOCK_FILE="/var/tmp/ssh_access_log.lock"
 
 GPU_THRESHOLD=50
 NEW_LOGIN_THRESHOLD=30
+
+if [ ! -f "$USER_LOG_FILE" ]; then
+    umask 000
+    touch "$USER_LOG_FILE"
+    chmod 666 "$USER_LOG_FILE"
+fi
+
+if [ ! -f "$LOCK_FILE" ]; then
+    umask 000
+    touch "$LOCK_FILE"
+    chmod 666 "$LOCK_FILE"
+fi
 
 send_notification() {
     local message="$1"
@@ -49,6 +65,13 @@ check_gpu_usage() {
     fi
     return 1
 }
+
+# Check if the script is run with a message
+if [ "$#" -gt 0 ]; then
+    MESSAGE="$*"
+    send_notification "$MESSAGE"
+    exit 0
+fi
 
 exec 200>"$LOCK_FILE"
 flock -n 200 || exit 1
@@ -92,7 +115,7 @@ if [ "$NEW_LOGIN" -eq 1 ]; then
 - <b>Date and Time:</b> ${DATE_TIME}
 - <b>IP Address:</b> ${ACCESS_IP}
 
-Check immediatly if this is an authorized access!"
+Check immediately if this is an authorized access!"
 
     send_notification "$MESSAGE"
 
